@@ -19,13 +19,13 @@
 ### Одной командой:
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/vless-reality-installer/vless-reality-installer/main/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/Triplooker/vless-reality-installer/main/install.sh)
 ```
 
 ### Или загрузить и запустить:
 
 ```bash
-wget https://raw.githubusercontent.com/vless-reality-installer/vless-reality-installer/main/install.sh
+wget https://raw.githubusercontent.com/Triplooker/vless-reality-installer/main/install.sh
 chmod +x install.sh
 ./install.sh
 ```
@@ -139,9 +139,9 @@ journalctl -u xray --since "1 hour ago"
 
 ## 🆘 Поддержка
 
-- 📧 **Issues**: [GitHub Issues](https://github.com/vless-reality-installer/vless-reality-installer/issues)
-- 📖 **Wiki**: [GitHub Wiki](https://github.com/vless-reality-installer/vless-reality-installer/wiki)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/vless-reality-installer/vless-reality-installer/discussions)
+- 📧 **Issues**: [GitHub Issues](https://github.com/Triplooker/vless-reality-installer/issues)
+- 📖 **Wiki**: [GitHub Wiki](https://github.com/Triplooker/vless-reality-installer/wiki)
+- 💬 **Discussions**: [GitHub Discussions](https://github.com/Triplooker/vless-reality-installer/discussions)
 
 ## 📜 Лицензия
 
