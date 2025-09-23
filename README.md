@@ -19,7 +19,7 @@
 ### Одной командой:
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/antyzo/vless-reality-installer/main/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/antyzo/vless-reality-installer/master/install.sh)
 ```
 
 ### Или загрузить и запустить:
