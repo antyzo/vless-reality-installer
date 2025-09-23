@@ -19,13 +19,13 @@
 ### Одной командой:
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/Triplooker/vless-reality-installer/main/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/antyzo/vless-reality-installer/main/install.sh)
 ```
 
 ### Или загрузить и запустить:
 
 ```bash
-wget https://raw.githubusercontent.com/Triplooker/vless-reality-installer/main/install.sh
+wget https://raw.githubusercontent.com/antyzo/vless-reality-installer/main/install.sh
 chmod +x install.sh
 ./install.sh
 ```
