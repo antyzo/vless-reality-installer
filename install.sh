@@ -41,54 +41,150 @@ check_root() {
 }
 
 # Определение операционной системы
+# Улучшенное определение операционной системы
 detect_os() {
-    if [[ -f /etc/redhat-release ]]; then
-        OS="centos"
-        PM="yum"
-    elif cat /etc/issue | grep -Eqi "debian"; then
-        OS="debian"
-        PM="apt-get"
-    elif cat /etc/issue | grep -Eqi "ubuntu"; then
-        OS="ubuntu"
-        PM="apt"
-    elif cat /proc/version | grep -Eqi "debian"; then
-        OS="debian"
-        PM="apt-get"
-    elif cat /proc/version | grep -Eqi "ubuntu"; then
-        OS="ubuntu"
-        PM="apt"
-    elif cat /proc/version | grep -Eqi "centos|red hat|redhat"; then
-        OS="centos"
-        PM="yum"
-    else
-        print_error "Неподдерживаемая операционная система!"
-        exit 1
+    print_status "Определяем операционную систему..."
+    
+    # Проверяем /etc/os-release (современный стандарт)
+    if [[ -f /etc/os-release ]]; then
+        . /etc/os-release
+        case $ID in
+            ubuntu)
+                OS="ubuntu"
+                PM="apt"
+                ;;
+            debian)
+                OS="debian" 
+                PM="apt-get"
+                ;;
+            centos|rhel|rocky|almalinux)
+                OS="centos"
+                if command -v dnf &> /dev/null; then
+                    PM="dnf"
+                else
+                    PM="yum"
+                fi
+                ;;
+            fedora)
+                OS="fedora"
+                PM="dnf"
+                ;;
+            *)
+                # Fallback для неизвестных дистрибутивов на базе известных
+                if [[ $ID_LIKE == *"debian"* ]]; then
+                    OS="debian"
+                    PM="apt-get"
+                elif [[ $ID_LIKE == *"rhel"* ]] || [[ $ID_LIKE == *"fedora"* ]]; then
+                    OS="centos"
+                    PM="yum"
+                else
+                    print_warning "Неизвестный дистрибутив: $ID, пытаемся определить автоматически..."
+                fi
+                ;;
+        esac
     fi
-    print_status "Обнаружена ОС: $OS"
+    
+    # Fallback на старые методы если /etc/os-release недоступен
+    if [[ -z "$OS" ]]; then
+        if [[ -f /etc/redhat-release ]]; then
+            OS="centos"
+            PM="yum"
+        elif cat /etc/issue 2>/dev/null | grep -Eqi "debian"; then
+            OS="debian"
+            PM="apt-get"
+        elif cat /etc/issue 2>/dev/null | grep -Eqi "ubuntu"; then
+            OS="ubuntu"
+            PM="apt"
+        elif cat /proc/version 2>/dev/null | grep -Eqi "debian"; then
+            OS="debian"
+            PM="apt-get"
+        elif cat /proc/version 2>/dev/null | grep -Eqi "ubuntu"; then
+            OS="ubuntu"
+            PM="apt"
+        elif cat /proc/version 2>/dev/null | grep -Eqi "centos|red hat|redhat"; then
+            OS="centos"
+            PM="yum"
+        else
+            print_error "Неподдерживаемая операционная система!"
+            print_error "Поддерживаются: Ubuntu, Debian, CentOS, RHEL, Rocky Linux, AlmaLinux"
+            exit 1
+        fi
+    fi
+    
+    # Проверим, доступен ли пакетный менеджер
+    if ! command -v $PM &> /dev/null; then
+        if [[ "$PM" == "apt" ]] && command -v apt-get &> /dev/null; then
+            PM="apt-get"
+        elif [[ "$PM" == "dnf" ]] && command -v yum &> /dev/null; then
+            PM="yum"
+        else
+            print_error "Пакетный менеджер $PM не найден!"
+            exit 1
+        fi
+    fi
+    
+    print_success "Обнаружена ОС: $OS, пакетный менеджер: $PM"
 }
 
 # Установка зависимостей
+# Улучшенная установка зависимостей
 install_dependencies() {
     print_status "Устанавливаем зависимости..."
     
     if [[ "$PM" == "apt" || "$PM" == "apt-get" ]]; then
+        # Для систем на базе Debian/Ubuntu
         $PM update -y
-        $PM install -y curl wget unzip qrencode ufw netstat-inet
+        # Основные зависимости
+        $PM install -y curl wget unzip qrencode ufw net-tools
+        # Дополнительные полезные пакеты
+        $PM install -y software-properties-common apt-transport-https ca-certificates gnupg
+        # Проверим, что все необходимое установлено
+        for cmd in curl wget unzip qrencode netstat; do
+            if ! command -v $cmd &> /dev/null; then
+                print_error "Не удалось установить $cmd"
+                exit 1
+            fi
+        done
     elif [[ "$PM" == "yum" ]]; then
+        # Для систем на базе RHEL/CentOS
         $PM update -y
-        $PM install -y curl wget unzip qrencode firewalld net-tools
+        $PM install -y curl wget unzip qrencode firewalld net-tools epel-release
+        # Для старых версий CentOS может потребоваться дополнительная установка
+        if ! command -v qrencode &> /dev/null; then
+            $PM install -y qrencode --enablerepo=epel
+        fi
     fi
+    
+    print_success "Зависимости успешно установлены"
 }
 
 # Поиск свободного порта
+# Поиск свободного порта с улучшенной логикой
 find_free_port() {
     print_status "Ищем свободный порт..."
     
     # Список предпочтительных портов для VPN
     preferred_ports=(8443 9443 2053 2083 2087 2096 8080 8880 2052 2082 2086 2095)
     
+    # Функция для проверки порта
+    check_port() {
+        local port=$1
+        # Используем ss (современная замена netstat)
+        if command -v ss &> /dev/null; then
+            ! ss -tuln 2>/dev/null | grep -q ":$port "
+        # Fallback на netstat если ss недоступен
+        elif command -v netstat &> /dev/null; then
+            ! netstat -tuln 2>/dev/null | grep -q ":$port "
+        # Альтернативная проверка через /proc/net/tcp
+        else
+            local hex_port=$(printf "%04X" $port)
+            ! grep -q ":$hex_port " /proc/net/tcp /proc/net/tcp6 2>/dev/null
+        fi
+    }
+    
+    # Проверяем предпочтительные порты
     for port in "${preferred_ports[@]}"; do
-        if ! netstat -tuln 2>/dev/null | grep -q ":$port " && ! ss -tuln 2>/dev/null | grep -q ":$port "; then
+        if check_port $port; then
             VPN_PORT=$port
             print_success "Найден свободный порт: $port"
             return 0
@@ -96,15 +192,22 @@ find_free_port() {
     done
     
     # Если предпочтительные порты заняты, ищем случайный свободный
+    print_status "Предпочтительные порты заняты, ищем альтернативные..."
     for i in $(seq 10000 65000); do
-        if ! netstat -tuln 2>/dev/null | grep -q ":$i " && ! ss -tuln 2>/dev/null | grep -q ":$i "; then
+        if check_port $i; then
             VPN_PORT=$i
             print_success "Найден свободный порт: $i"
             return 0
         fi
+        
+        # Ограничиваем количество попыток
+        if [[ $((i - 10000)) -gt 1000 ]]; then
+            print_error "Не удалось найти свободный порт после 1000 попыток"
+            exit 1
+        fi
     done
     
-    print_error "Не удалось найти свободный порт!"
+    print_error "Не удалось найти свободный порт"
     exit 1
 }
 
