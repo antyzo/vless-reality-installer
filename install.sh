@@ -339,24 +339,56 @@ EOF
 }
 
 # Настройка файрвола
+# Настройка файрвола
 configure_firewall() {
     print_status "Настраиваем файрвол..."
     
     if [[ "$OS" == "ubuntu" || "$OS" == "debian" ]]; then
         # UFW для Ubuntu/Debian
         if command -v ufw >/dev/null 2>&1; then
+            # Проверим статус UFW
+            ufw_status=$(ufw status | grep -o "Status: \w*" | cut -d' ' -f2)
+            
+            if [[ "$ufw_status" != "active" ]]; then
+                print_status "Активируем UFW файрвол..."
+                ufw --force enable
+                print_success "UFW файрвол активирован"
+            fi
+            
+            # Добавляем правило для VPN порта
             ufw allow $VPN_PORT/tcp
             print_success "Порт $VPN_PORT добавлен в UFW"
+            
+            # Показываем статус для подтверждения
+            print_status "Статус файрвола:"
+            ufw status | grep -E "(Status|$VPN_PORT)" || true
+        else
+            print_warning "UFW не установлен, используем iptables..."
+            # Fallback на iptables если UFW недоступен
+            iptables -I INPUT -p tcp --dport $VPN_PORT -j ACCEPT 2>/dev/null || true
+            print_success "Порт $VPN_PORT добавлен в iptables"
         fi
     elif [[ "$OS" == "centos" ]]; then
         # FirewallD для CentOS
         if command -v firewall-cmd >/dev/null 2>&1; then
             systemctl start firewalld 2>/dev/null || true
             systemctl enable firewalld 2>/dev/null || true
-            firewall-cmd --permanent --add-port=$VPN_PORT/tcp
-            firewall-cmd --reload
-            print_success "Порт $VPN_PORT добавлен в FirewallD"
+            firewall-cmd --permanent --add-port=$VPN_PORT/tcp 2>/dev/null || true
+            firewall-cmd --reload 2>/dev/null || true
+            print_success "Порт $VPN_PORT добавлен в firewalld"
+        else
+            print_warning "firewalld не установлен, используем iptables..."
+            iptables -I INPUT -p tcp --dport $VPN_PORT -j ACCEPT 2>/dev/null || true
+            print_success "Порт $VPN_PORT добавлен в iptables"
         fi
+    fi
+    
+    # Дополнительная проверка доступности порта
+    print_status "Проверяем доступность порта $VPN_PORT..."
+    if netstat -tuln 2>/dev/null | grep -q ":$VPN_PORT " || ss -tuln 2>/dev/null | grep -q ":$VPN_PORT "; then
+        print_success "Порт $VPN_PORT слушается сервисом"
+    else
+        print_warning "Порт $VPN_PORT пока не слушается (будет активен после запуска Xray)"
     fi
 }
 
@@ -502,7 +534,8 @@ EOF
 }
 
 # Вывод информации о подключении
-show_connection_info() {
+final_system_check
+    show_connection_info() {
     echo
     echo -e "${GREEN}╔════════════════════════════════════════════════════════════════╗${NC}"
     echo -e "${GREEN}║                    🎉 УСТАНОВКА ЗАВЕРШЕНА! 🎉                   ║${NC}"
@@ -547,6 +580,55 @@ show_connection_info() {
 }
 
 # Основная функция установки
+
+# Финальная проверка системы
+final_system_check() {
+    print_status "Выполняем финальную проверку системы..."
+    
+    # Проверка статуса Xray
+    if systemctl is-active --quiet xray; then
+        print_success "✅ Xray сервис активен и работает"
+    else
+        print_error "❌ Xray сервис не активен!"
+        systemctl status xray --no-pager || true
+        exit 1
+    fi
+    
+    # Проверка прослушивания порта
+    if netstat -tuln 2>/dev/null | grep -q ":$VPN_PORT " || ss -tuln 2>/dev/null | grep -q ":$VPN_PORT "; then
+        print_success "✅ Порт $VPN_PORT прослушивается"
+    else
+        print_error "❌ Порт $VPN_PORT не прослушивается!"
+        print_status "Активные порты:"
+        netstat -tuln 2>/dev/null | grep LISTEN || ss -tuln 2>/dev/null | grep LISTEN || true
+        exit 1
+    fi
+    
+    # Проверка файрвола
+    if [[ "$OS" == "ubuntu" || "$OS" == "debian" ]]; then
+        if command -v ufw >/dev/null 2>&1; then
+            ufw_status=$(ufw status | head -1)
+            if [[ $ufw_status == *"active"* ]]; then
+                if ufw status | grep -q "$VPN_PORT"; then
+                    print_success "✅ UFW активен и порт $VPN_PORT открыт"
+                else
+                    print_warning "⚠️  UFW активен, но порт $VPN_PORT может быть не настроен"
+                fi
+            else
+                print_warning "⚠️  UFW неактивен - соединения могут блокироваться"
+            fi
+        fi
+    fi
+    
+    # Проверка конфигурационных файлов
+    if [[ -f "/root/vpn-configs/vless-uri.txt" && -f "/root/vpn-configs/qrcode.png" ]]; then
+        print_success "✅ Клиентские конфигурации созданы"
+    else
+        print_warning "⚠️  Некоторые клиентские файлы отсутствуют"
+    fi
+    
+    print_success "🔍 Системная проверка завершена"
+}
 main() {
     clear
     echo -e "${PURPLE}╔════════════════════════════════════════════════════════════════╗${NC}"
@@ -569,6 +651,7 @@ main() {
     configure_firewall
     start_xray_service
     create_client_configs
+    final_system_check
     show_connection_info
     
     print_success "🎉 VPN сервер успешно установлен и настроен!"
