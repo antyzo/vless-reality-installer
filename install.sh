@@ -532,10 +532,8 @@ EOF
     
     print_success "Клиентские конфигурации созданы!"
 }
-
 # Вывод информации о подключении
-final_system_check
-    show_connection_info() {
+show_connection_info() {
     echo
     echo -e "${GREEN}╔════════════════════════════════════════════════════════════════╗${NC}"
     echo -e "${GREEN}║                    🎉 УСТАНОВКА ЗАВЕРШЕНА! 🎉                   ║${NC}"
