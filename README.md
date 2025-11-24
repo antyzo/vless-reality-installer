@@ -11,6 +11,14 @@
 
 ### ✨ Особенности
 
+### Новый пресет: Mobile Reality (VK userapi, TCP:8443)
+- Отдельный сервис, не трогает существующие установки
+- SNI: sunN.userapi.com (по умолчанию sun6-21.userapi.com)
+- Port: 8443 (можно поменять)
+- Pattern: flow=vision, shortId=ffffffffff, spiderX=/
+- Команда: `sudo bash scripts/install_mobile_reality.sh`
+
+
 - ✅ **Работает прямо сейчас** - проверено в ноябре 2025
 - ✅ **Простой TCP** - обходит UDP блокировки операторов
 - ✅ **Без TLS** - не требует сертификатов и доменов
